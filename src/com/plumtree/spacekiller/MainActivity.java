@@ -5,6 +5,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Random;
 
+
 import org.anddev.andengine.audio.music.Music;
 import org.anddev.andengine.audio.music.MusicFactory;
 import org.anddev.andengine.audio.sound.Sound;
@@ -21,8 +22,6 @@ import org.anddev.andengine.entity.modifier.MoveModifier;
 import org.anddev.andengine.entity.modifier.MoveXModifier;
 import org.anddev.andengine.entity.scene.Scene;
 import org.anddev.andengine.entity.scene.Scene.IOnSceneTouchListener;
-import org.anddev.andengine.entity.scene.background.AutoParallaxBackground;
-import org.anddev.andengine.entity.scene.background.ParallaxBackground.ParallaxEntity;
 import org.anddev.andengine.entity.sprite.Sprite;
 import org.anddev.andengine.entity.util.FPSLogger;
 import org.anddev.andengine.input.touch.TouchEvent;
@@ -31,15 +30,18 @@ import org.anddev.andengine.opengl.texture.atlas.bitmap.BitmapTextureAtlas;
 import org.anddev.andengine.opengl.texture.atlas.bitmap.BitmapTextureAtlasTextureRegionFactory;
 import org.anddev.andengine.opengl.texture.region.TextureRegion;
 import org.anddev.andengine.ui.activity.BaseGameActivity;
+import org.andengine.extension.physics.box2d.PhysicsWorld;
 
+import com.plumtree.spacekiller.VerticalParallaxBackground.VerticalParallaxEntity;
+
+import android.hardware.SensorManager;
 import android.util.Log;
 import android.view.Display;
 
-public class MainActivity extends BaseGameActivity implements IOnSceneTouchListener{
+public class MainActivity<ITextureRegion> extends BaseGameActivity implements IOnSceneTouchListener{
 	
 	private Camera mCamera;
 	private Scene mMainScene;
-	private Sprite mBackground;
 	private BitmapTextureAtlas mBitmapTextureAtlas, mBgTextureAtlas;
 	private TextureRegion mPlayerTextureRegion, mProjectileTextureRegion, mTargetTextureRegion, mSceneBgTextureRegion;
 	private Sprite player;
@@ -47,6 +49,7 @@ public class MainActivity extends BaseGameActivity implements IOnSceneTouchListe
 	private boolean hit ;
 	private Sound shootingSound;
 	private Music backgroundMusic;
+	private PhysicsWorld mPhysicsWorld;
 	
 	private static final int CAMERA_WIDTH = 720;
     private static final int CAMERA_HEIGHT = 480;
@@ -79,7 +82,7 @@ public class MainActivity extends BaseGameActivity implements IOnSceneTouchListe
 		
 		this.mCamera = new Camera(0, 0, cameraWidth, cameraHeight);
 		
-		return new Engine(new EngineOptions(true, ScreenOrientation.PORTRAIT,
+		return new Engine(new EngineOptions(true, ScreenOrientation.LANDSCAPE,
 				new RatioResolutionPolicy(cameraWidth, cameraHeight), this.mCamera)
 		        .setNeedsMusic(true).setNeedsSound(true));  
 	}
@@ -88,12 +91,12 @@ public class MainActivity extends BaseGameActivity implements IOnSceneTouchListe
 	public void onLoadResources() {
 		// TODO Auto-generated method stub
 		BitmapTextureAtlasTextureRegionFactory.setAssetBasePath("gfx/");
-		this.mBitmapTextureAtlas = new BitmapTextureAtlas(1024, 1024, 
-				TextureOptions.BILINEAR_PREMULTIPLYALPHA);
+		this.mBitmapTextureAtlas = new BitmapTextureAtlas(2048, 1024, 
+				TextureOptions.DEFAULT);
 
     	BitmapTextureAtlasTextureRegionFactory.setAssetBasePath("gfx/");
-		this.mBgTextureAtlas = new BitmapTextureAtlas(1024 ,1024 , 
-					TextureOptions.DEFAULT);
+		this.mBgTextureAtlas = new BitmapTextureAtlas(2048 ,1024 , 
+					TextureOptions.REPEATING_BILINEAR_PREMULTIPLYALPHA);
 
 		
 		mSceneBgTextureRegion = BitmapTextureAtlasTextureRegionFactory
@@ -103,7 +106,7 @@ public class MainActivity extends BaseGameActivity implements IOnSceneTouchListe
 				.createFromAsset(this.mBitmapTextureAtlas, this, "click.png",0,0);
 		mTargetTextureRegion = BitmapTextureAtlasTextureRegionFactory
 				.createFromAsset(this.mBitmapTextureAtlas, this, "Target.png", 128, 0);
-		mEngine.getTextureManager().loadTexture(mBitmapTextureAtlas);
+		this.mEngine.getTextureManager().loadTexture(mBitmapTextureAtlas);
 		mProjectileTextureRegion = BitmapTextureAtlasTextureRegionFactory
 				.createFromAsset(this.mBitmapTextureAtlas, this, "Projectile.png",64,0);
 		SoundFactory.setAssetBasePath("mfx/");
@@ -127,32 +130,27 @@ public class MainActivity extends BaseGameActivity implements IOnSceneTouchListe
 	public Scene onLoadScene() {
 		// TODO Auto-generated method stub
 		mEngine.registerUpdateHandler(new FPSLogger());
-		
-	/*	final int centerX = (CAMERA_WIDTH -
-				mSceneBgTextureRegion.getWidth()) / 2; 
-		final int centerY = (CAMERA_HEIGHT -
-						mSceneBgTextureRegion.getHeight()) / 2;
-		this.mMainScene = new Scene();
-		SpriteBackground bg = new SpriteBackground(new Sprite(centerX, centerY, mSceneBgTextureRegion));
-		mMainScene.setBackground(bg);*/
-	//	mMainScene.setBackground(new ColorBackground(0,0,0,1));
 		this.mMainScene= new Scene();
+		/*
 		final AutoParallaxBackground autoParallaxBackground = 
 				new AutoParallaxBackground(0, 0, 0, 10);
 		autoParallaxBackground.attachParallaxEntity(new ParallaxEntity(-25.0f,
 				new Sprite(0,mCamera.getHeight() - this.mSceneBgTextureRegion.getHeight(),
 						this.mSceneBgTextureRegion)));
 		mMainScene.setBackground(autoParallaxBackground);
-		/*mSceneBG = BitmapTextureAtlasTextureRegionFactory
-				.createFromAsset(this.mBitmapTextureAtlas, this, "click.png",0,0);
-		
-		mMainScene.setBackground(new Sprite(mMainScene.getInitialX(), mMainScene.getInitialY(), mSceneBG)));
 		*/
+		final AutoVerticalParallaxBackground autoParallaxBg = 
+				new AutoVerticalParallaxBackground(0, 0, 0, 150);
+		autoParallaxBg.attachParallaxEntity(new VerticalParallaxEntity(4.0f,new Sprite(0, mCamera.getHeight(),
+						this.mSceneBgTextureRegion)));
+		mMainScene.setBackground(autoParallaxBg);
 		
-	//	this.mBackground = new Sprite(0,0,this.mSceneBgTextureRegion);
-		//mMainScene.getFirstChild().attachChild(this.mBackground);
-		final int PlayerX = this.mPlayerTextureRegion.getWidth() / 2;
-		final int PlayerY = (int) ((mCamera.getHeight()-mPlayerTextureRegion.getHeight())/2);
+	//	final ParalarallaxEntity()
+	//	mMainScene.setBackground(alaxBackground autoParallaxBackground = new ParallaxBackground(0, 0,10);
+	//	autoParallaxBackground.addPutoParallaxBackground);
+		
+		final int PlayerX = (int) (mCamera.getWidth()/2) ;
+		final int PlayerY = (int) (mCamera.getHeight()-(mPlayerTextureRegion.getHeight()*1.3));
 		player = new Sprite(PlayerX,PlayerY,mPlayerTextureRegion);
 		player.setScale(2);
 		mMainScene.attachChild(player);
@@ -177,7 +175,7 @@ public class MainActivity extends BaseGameActivity implements IOnSceneTouchListe
 		int rangeY = maxY - minY ;
 		int y = ran.nextInt(rangeY) + minY;
 		
-		Sprite target = new Sprite(x, y, mTargetTextureRegion.clone());
+		Sprite target = new Sprite(x, y, mTargetTextureRegion.deepCopy());
 		mMainScene.attachChild(target);
 		
 		int minDuration = 2;
@@ -186,7 +184,7 @@ public class MainActivity extends BaseGameActivity implements IOnSceneTouchListe
 		int actualDuration = ran.nextInt(rangeDuration) + minDuration ;
 		
 		MoveXModifier mod = new MoveXModifier(actualDuration, target.getX(),-target.getWidth());
-		target.registerEntityModifier(mod.clone());
+		target.registerEntityModifier(mod.deepCopy());
 		targetsToBeAdded.add(target);
 	}
 	
@@ -287,7 +285,7 @@ public class MainActivity extends BaseGameActivity implements IOnSceneTouchListe
 			return ;
 		final Sprite projectile;
 		projectile = new Sprite(player.getX(), player.getY(),
-				mProjectileTextureRegion.clone());
+				mProjectileTextureRegion.deepCopy());
 		mMainScene.attachChild(projectile,1);
 		
 		int realX = (int) (mCamera.getWidth()+ projectile.getWidth()/2.0f);
@@ -302,7 +300,7 @@ public class MainActivity extends BaseGameActivity implements IOnSceneTouchListe
 		  
 		MoveModifier modifier = new MoveModifier(realMoveDuration,
 				projectile.getX(), realX, projectile.getY(), realY);
-		projectile.registerEntityModifier(modifier.clone());
+		projectile.registerEntityModifier(modifier.deepCopy());
 		projectilesToBeAdded.add(projectile);
 		shootingSound.play();
 	}
@@ -319,4 +317,13 @@ public class MainActivity extends BaseGameActivity implements IOnSceneTouchListe
 		
 		return false;
 	}
+	
+/*	private void initPhysics(){
+		mPhysicsWorld = new PhysicsWorld(Vector2(0,SensorManager.GRAVITY_EARTH), false);
+		mMainScene.registerUpdateHandler(mPhysicsWorld);
+	}
+	
+	public void jump(){
+		player.setLinearVelocity(new Vector2(player.getLinearVelocity().x, -13.5f));
+	}*/
 }
